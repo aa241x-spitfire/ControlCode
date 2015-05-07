@@ -49,6 +49,11 @@
 #include "aa241x_high_aux.h"
 
 
+//target parameters;
+
+bool target_locked = false;
+void lock_target(float yaw_t, float alt_t);
+
 /**
  * Main function in which your code should be written.
  *
@@ -56,6 +61,12 @@
  * feel free to add all the function you'd like, but make sure all
  * the code you'd like executed on a loop is in this function.
  */
+
+void lock_target(float yaw_t, float alt_t) {
+    aah_parameters.yaw_target = yaw_t;
+    aah_parameters.alt_target = alt_t;
+}
+
 void flight_control() {
 
 	//float my_float_variable = 0.0f;		/**< example float variable */
@@ -68,15 +79,19 @@ void flight_control() {
 		new_pic = false;
 	}
     
-    float betad = 0.0f;
-    float alphad = 0.0f;
-    float gammad = 0.0f;
+    if (!target_locked) {
+        lock_target(yaw, position_D_gps);
+        target_locked = true;
+    }
     
-    float roll_cor = aah_parameters.K_ail_beta * (betad - roll);
-    float pitch_cor = aah_parameters.K_ele_alpha * (alphad - pitch);
-    float yaw_cor = aah_parameters.K_rud_gamma * (gammad - yaw);
+    
+    float roll_cor = (aah_parameters.ail_trim - aah_parameters.K_ail_beta * (roll) - aah_parameters.K_ail_betadot * (roll_rate) - aah_parameters.K_ail_gamma * (yaw - aah_parameters.yaw_target) + aah_parameters.K_ail_gammadot * (yaw_rate));
+    
+    float pitch_cor = (aah_parameters.ele_trim - aah_parameters.K_ele_alpha * (pitch - aah_parameters.pitch_trim) - aah_parameters.K_ele_alphadot * (pitch_rate) - aah_parameters.K_ele_gamma * (yaw - aah_parameters.yaw_target) + aah_parameters.K_ele_gammadot * (abs(yaw_rate)) + aah_parameters.K_ele_z * (position_D_gps - aah_parameters.alt_target) + K_ele_zdot * (speed_body_w));
+    
+    float yaw_cor = (aah_parameters.rud_trim - aah_parameters.K_rud_gamma * ( yaw) - aah_parameters.K_rud_gammadot*(yaw_rate));
 
-
+    
 	// getting low data value example
 	// float my_low_data = low_data.variable_name1;
 
@@ -89,6 +104,7 @@ void flight_control() {
 	// where zero is no actuation, and -1,1 are full throw in either the + or - directions
     roll_servo_out = roll_cor;
     pitch_servo_out = pitch_cor;
-    yaw_servo_out = yaw_cor;
-	throttle_servo_out = man_throttle_in;
+    yaw_servo_out = man_yaw_in;
+    throttle_servo_out = man_throttle_in;
 }
+
