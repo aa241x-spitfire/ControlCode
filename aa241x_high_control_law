@@ -62,6 +62,30 @@ void lock_target(float yaw_t, float alt_t);
  * the code you'd like executed on a loop is in this function.
  */
 
+
+float line_error(float tar_h, float tar_px, float tar_py ,float curr_px, float curr_py) {
+	//x y z = North East Down
+	float vx, vy, vz; //to-target vector
+	float ux, uy, uz; //unit to-target vector
+	float hx, hy, hz; //unit heading vector
+	float Mv;
+	float theta_err;
+	float heading_err;
+	float
+	vx = tar_px-curr_px;
+	vy = tar_py-curr_py;
+	Mv = sqrt(pow(vx,2) + pow(vy,2));
+	
+	ux = vx/Mv;
+	uy = vy/Mv;
+	
+	hx = 1.0*cos(tar_h);
+	hy = 1.0*sin(tar_h);
+	theta_err = acos(ux*hx+uy*hy);
+	return Mv*sin(theta_err)
+}
+
+
 void lock_target(float yaw_t, float alt_t) {
     aah_parameters.yaw_target = yaw_t;
     aah_parameters.alt_target = alt_t;
@@ -84,6 +108,8 @@ void flight_control() {
         target_locked = true;
     }
     
+    //Replace 0, 0 with target location
+    float e_line = line_error(aah_parameters.yaw_target, 0, 0, position_N_gps, position_E_gps);
     
     float roll_cor = (aah_parameters.ail_trim - aah_parameters.K_ail_beta * (roll) - aah_parameters.K_ail_betadot * (roll_rate) - aah_parameters.K_ail_gamma * (yaw - aah_parameters.yaw_target) + aah_parameters.K_ail_gammadot * (yaw_rate));
     
