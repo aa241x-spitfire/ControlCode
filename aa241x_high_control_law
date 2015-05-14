@@ -55,6 +55,8 @@ static bool target_locked = false;
 static void lock_target(float yaw_t, float alt_t);
 //static float previous_loop_time = 0.0f;
 static float tx, ty;
+float yaw_target = 0;
+float alt_target = 0;
 /**
  * Main function in which your code should be written.
  *
@@ -85,8 +87,8 @@ static float line_error(float tar_h, float tar_px, float tar_py ,float curr_px, 
 }
 
 void lock_target(float yaw_t, float alt_t) {
-    aah_parameters.yaw_target = yaw_t;
-    aah_parameters.alt_target = alt_t;
+    yaw_target = yaw_t;
+    alt_target = alt_t;
 }
 
 void flight_control() {
@@ -94,7 +96,7 @@ void flight_control() {
     if ((hrt_absolute_time() - previous_loop_timestamp) > 1000000.0f) {
         //If you've entered into Auto mode
         target_locked = true;
-        //previous_loop_time = hrt_absolute_time();
+        //previous_loop_timestamp = hrt_absolute_time();
     }
     
     if (new_pic) {
@@ -112,11 +114,11 @@ void flight_control() {
         target_locked = false;
     }
     
-    float e_line = line_error(aah_parameters.yaw_target, tx, ty, position_N, position_E);
+    float e_line = line_error(yaw_target, tx, ty, position_N, position_E);
     
-    float roll_cor = (aah_parameters.ail_trim - aah_parameters.K_ail_beta * (roll) - aah_parameters.K_ail_betadot * (roll_rate) - aah_parameters.K_ail_gamma * (yaw - aah_parameters.yaw_target) - aah_parameters.K_ail_gammadot * (yaw_rate) - aah_parameters.K_ail_y * e_line);
+    float roll_cor = (aah_parameters.ail_trim - aah_parameters.K_ail_beta * (roll) - aah_parameters.K_ail_betadot * (roll_rate) - aah_parameters.K_ail_gamma * (yaw - yaw_target) - aah_parameters.K_ail_gammadot * (yaw_rate) - aah_parameters.K_ail_y * (e_line));
     
-    float pitch_cor = (aah_parameters.ele_trim - aah_parameters.K_ele_alpha * (pitch - aah_parameters.pitch_trim) - aah_parameters.K_ele_alphadot * (pitch_rate) - aah_parameters.K_ele_gamma * (yaw - aah_parameters.yaw_target) + aah_parameters.K_ele_gammadot * (abs(yaw_rate)) + aah_parameters.K_ele_z * (position_D_gps - aah_parameters.alt_target) - aah_parameters.K_ele_y * e_line);
+    float pitch_cor = (aah_parameters.ele_trim - aah_parameters.K_ele_alpha * (pitch - aah_parameters.pitch_trim) - aah_parameters.K_ele_alphadot * (pitch_rate) - aah_parameters.K_ele_gamma * (yaw - yaw_target) + aah_parameters.K_ele_gammadot * (abs(yaw_rate)) + aah_parameters.K_ele_z * (position_D_gps - alt_target) - aah_parameters.K_ele_y * (e_line));
     
     //float yaw_cor = (aah_parameters.rud_trim - aah_parameters.K_rud_gamma * ( yaw) - aah_parameters.K_rud_gammadot*(yaw_rate));
 
