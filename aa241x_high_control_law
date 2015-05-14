@@ -51,9 +51,10 @@
 
 //target parameters;
 
-bool target_locked = false;
-void lock_target(float yaw_t, float alt_t);
-
+static bool target_locked = false;
+static void lock_target(float yaw_t, float alt_t);
+//static float previous_loop_time = 0.0f;
+static float tx, ty;
 /**
  * Main function in which your code should be written.
  *
@@ -61,30 +62,27 @@ void lock_target(float yaw_t, float alt_t);
  * feel free to add all the function you'd like, but make sure all
  * the code you'd like executed on a loop is in this function.
  */
+static float line_error(float tar_h, float tar_px, float tar_py ,float curr_px, float curr_py) {
+    //x y z = North East Down
+    float vx, vy; //to-target vector
+    float ux, uy; //unit to-target vector
+    float hx, hy; //unit heading vector
+    float Mv;
+    float theta_err;
+    //float heading_err;
 
-
-float line_error(float tar_h, float tar_px, float tar_py ,float curr_px, float curr_py) {
-	//x y z = North East Down
-	float vx, vy, vz; //to-target vector
-	float ux, uy, uz; //unit to-target vector
-	float hx, hy, hz; //unit heading vector
-	float Mv;
-	float theta_err;
-	float heading_err;
-	float
-	vx = tar_px-curr_px;
-	vy = tar_py-curr_py;
-	Mv = sqrt(pow(vx,2) + pow(vy,2));
-	
-	ux = vx/Mv;
-	uy = vy/Mv;
-	
-	hx = 1.0*cos(tar_h);
-	hy = 1.0*sin(tar_h);
-	theta_err = acos(ux*hx+uy*hy);
-	return Mv*sin(theta_err)
+    vx = tar_px - curr_px;
+    vy = tar_py - curr_py;
+    Mv = sqrt(pow(vx,2) + pow(vy,2));
+    
+    ux = vx/Mv;
+    uy = vy/Mv;
+    
+    hx = cos(tar_h);
+    hy = sin(tar_h);
+    theta_err = acos(ux*hx+uy*hy);
+    return Mv*(float)sin(theta_err);
 }
-
 
 void lock_target(float yaw_t, float alt_t) {
     aah_parameters.yaw_target = yaw_t;
@@ -93,9 +91,13 @@ void lock_target(float yaw_t, float alt_t) {
 
 void flight_control() {
 
-	//float my_float_variable = 0.0f;		/**< example float variable */
-
-	if (new_pic) {
+    if ((hrt_absolute_time() - previous_loop_timestamp) > 1000000.0f) {
+        //If you've entered into Auto mode
+        target_locked = true;
+        //previous_loop_time = hrt_absolute_time();
+    }
+    
+    if (new_pic) {
 
 		// TODO: run picture result logic here......
 
@@ -103,19 +105,20 @@ void flight_control() {
 		new_pic = false;
 	}
     
-    if (!target_locked) {
+    if (target_locked) {
         lock_target(yaw, position_D_gps);
-        target_locked = true;
+        tx = (float)cos(yaw) * 100.0f + position_E;
+        ty = (float)sin(yaw) * 100.0f + position_N;
+        target_locked = false;
     }
     
-    //Replace 0, 0 with target location
-    float e_line = line_error(aah_parameters.yaw_target, 0, 0, position_N_gps, position_E_gps);
+    float e_line = line_error(aah_parameters.yaw_target, tx, ty, position_N, position_E);
     
-    float roll_cor = (aah_parameters.ail_trim - aah_parameters.K_ail_beta * (roll) - aah_parameters.K_ail_betadot * (roll_rate) - aah_parameters.K_ail_gamma * (yaw - aah_parameters.yaw_target) + aah_parameters.K_ail_gammadot * (yaw_rate));
+    float roll_cor = (aah_parameters.ail_trim - aah_parameters.K_ail_beta * (roll) - aah_parameters.K_ail_betadot * (roll_rate) - aah_parameters.K_ail_gamma * (yaw - aah_parameters.yaw_target) - aah_parameters.K_ail_gammadot * (yaw_rate) - aah_parameters.K_ail_y * e_line);
     
-    float pitch_cor = (aah_parameters.ele_trim - aah_parameters.K_ele_alpha * (pitch - aah_parameters.pitch_trim) - aah_parameters.K_ele_alphadot * (pitch_rate) - aah_parameters.K_ele_gamma * (yaw - aah_parameters.yaw_target) + aah_parameters.K_ele_gammadot * (abs(yaw_rate)) + aah_parameters.K_ele_z * (position_D_gps - aah_parameters.alt_target) + K_ele_zdot * (speed_body_w));
+    float pitch_cor = (aah_parameters.ele_trim - aah_parameters.K_ele_alpha * (pitch - aah_parameters.pitch_trim) - aah_parameters.K_ele_alphadot * (pitch_rate) - aah_parameters.K_ele_gamma * (yaw - aah_parameters.yaw_target) + aah_parameters.K_ele_gammadot * (abs(yaw_rate)) + aah_parameters.K_ele_z * (position_D_gps - aah_parameters.alt_target) - aah_parameters.K_ele_y * e_line);
     
-    float yaw_cor = (aah_parameters.rud_trim - aah_parameters.K_rud_gamma * ( yaw) - aah_parameters.K_rud_gammadot*(yaw_rate));
+    //float yaw_cor = (aah_parameters.rud_trim - aah_parameters.K_rud_gamma * ( yaw) - aah_parameters.K_rud_gammadot*(yaw_rate));
 
     
 	// getting low data value example
@@ -131,6 +134,6 @@ void flight_control() {
     roll_servo_out = roll_cor;
     pitch_servo_out = pitch_cor;
     yaw_servo_out = man_yaw_in;
-    throttle_servo_out = man_throttle_in;
+	throttle_servo_out = man_throttle_in;
 }
 
