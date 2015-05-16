@@ -53,10 +53,10 @@
 
 static bool target_locked = false;
 static void lock_target(float yaw_t, float alt_t);
-//static float previous_loop_time = 0.0f;
 static float tx, ty;
 float yaw_target = 0;
 float alt_target = 0;
+
 /**
  * Main function in which your code should be written.
  *
@@ -64,6 +64,7 @@ float alt_target = 0;
  * feel free to add all the function you'd like, but make sure all
  * the code you'd like executed on a loop is in this function.
  */
+ 
 static float line_error(float tar_h, float tar_px, float tar_py ,float curr_px, float curr_py) {
     //x y z = North East Down
     float vx, vy; //to-target vector
@@ -89,6 +90,7 @@ static float line_error(float tar_h, float tar_px, float tar_py ,float curr_px, 
 void lock_target(float yaw_t, float alt_t) {
     yaw_target = yaw_t;
     alt_target = alt_t;
+    yaw_desired = yaw_t;
 }
 
 void flight_control() {
@@ -96,7 +98,6 @@ void flight_control() {
     if ((hrt_absolute_time() - previous_loop_timestamp) > 1000000.0f) {
         //If you've entered into Auto mode
         target_locked = true;
-        //previous_loop_timestamp = hrt_absolute_time();
     }
     
     if (new_pic) {
@@ -120,7 +121,7 @@ void flight_control() {
     
     float pitch_cor = (aah_parameters.ele_trim - aah_parameters.K_ele_alpha * (pitch - aah_parameters.pitch_trim) - aah_parameters.K_ele_alphadot * (pitch_rate) - aah_parameters.K_ele_gamma * (yaw - yaw_target) + aah_parameters.K_ele_gammadot * (abs(yaw_rate)) + aah_parameters.K_ele_z * (position_D_gps - alt_target) - aah_parameters.K_ele_y * (e_line));
     
-    //float yaw_cor = (aah_parameters.rud_trim - aah_parameters.K_rud_gamma * ( yaw) - aah_parameters.K_rud_gammadot*(yaw_rate));
+    //float yaw_cor = (aah_parameters.rud_trim - aah_parameters.K_rud_gamma * (yaw) - aah_parameters.K_rud_gammadot*(yaw_rate));
 
     
 	// getting low data value example
@@ -133,6 +134,7 @@ void flight_control() {
 	// ENSURE THAT YOU SET THE SERVO OUTPUTS!!!
 	// outputs should be set to values between -1..1 (except throttle is 0..1)
 	// where zero is no actuation, and -1,1 are full throw in either the + or - directions
+	
     roll_servo_out = roll_cor;
     pitch_servo_out = pitch_cor;
     yaw_servo_out = man_yaw_in;
