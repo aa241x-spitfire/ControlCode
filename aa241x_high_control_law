@@ -129,7 +129,11 @@ void flight_control() {
 
 	// setting high data value example
 	//high_data.variable_name1 = my_float_variable;
-
+    high_data.y_error = e_line;
+    high_data.alpha_error = (pitch - aah_parameters.pitch_trim);
+    high_data.beta_error = roll;
+    high_data.gamma_error = (yaw - yaw_target);
+    
 
 	// ENSURE THAT YOU SET THE SERVO OUTPUTS!!!
 	// outputs should be set to values between -1..1 (except throttle is 0..1)
