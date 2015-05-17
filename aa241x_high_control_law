@@ -65,6 +65,14 @@ float alt_target = 0;
  * the code you'd like executed on a loop is in this function.
  */
  
+ /*
+ * Returns true if within a specified distance of the end target.
+ */
+ static bool destinationReached(float end_x, float end_y, float curr_x, float curr_y) {
+     float THRESHOLD = 10.0f;	//Max distance from end point
+     float dist = sqrt(pow(end_x-curr_x,2) + pow(end_y-curr_y,2));
+ }
+ 
  /**
  * Given the plane's current position and a refrence point and heading ona  line,
  * Computes the distance from the line using dot products
@@ -112,12 +120,25 @@ void flight_control() {
 		new_pic = false;
 	}
     
-    if (target_locked) {
+    if (target_locked) { //Just entered Auto-Mode
+    	float offset = 0.3f; //Provide a slight angular offset to start plane off the line
         lock_target(yaw, position_D_gps);
-        tx = (float)cos(yaw) * 100.0f + position_E;
-        ty = (float)sin(yaw) * 100.0f + position_N;
+        tx = (float)cos(yaw+.3) * 100.0f + position_E;
+        ty = (float)sin(yaw+.3) * 100.0f + position_N;
+        //
         target_locked = false;
     }
+    
+    if (destinationReached(tx, ty, position_N, position_E)) { //Find new waypoint
+        float offset = 0.0f; //Provide a slight angular offset to start plane off the line
+        float newYaw = 0.52f;
+        lock_target(yaw+0.52f, position_D_gps);
+        tx = (float)cos(yaw+.offset) * 80.0f + position_E;
+        ty = (float)sin(yaw+.offset) * 80.0f + position_N;
+        //
+        target_locked = false;
+    }
+    
     
     float e_line = line_error(yaw_target, tx, ty, position_N, position_E);
     
