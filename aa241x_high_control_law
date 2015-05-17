@@ -65,12 +65,16 @@ float alt_target = 0;
  * the code you'd like executed on a loop is in this function.
  */
  
+ /**
+ * Given the plane's current position and a refrence point and heading ona  line,
+ * Computes the distance from the line using dot products
+ */
 static float line_error(float tar_h, float tar_px, float tar_py ,float curr_px, float curr_py) {
     //x y z = North East Down
-    float vx, vy; //to-target vector
-    float ux, uy; //unit to-target vector
-    float hx, hy; //unit heading vector
-    float Mv;
+    float vx, vy; //to-target vector, centered on current position
+    float ux, uy; //Unit vector version of v
+    float hx, hy; //unit heading vector, centered on current position
+    float Mv;	  // Magnitude of vector v
     float theta_err;
     //float heading_err;
 
