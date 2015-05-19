@@ -53,40 +53,21 @@
 
 static bool target_locked = false;
 static void lock_target(float yaw_t, float alt_t);
-static float tx, ty;
-float yaw_target = 0;
-float alt_target = 0;
-static int pass = 0;
+static float tx, ty, yaw_error;
+static float yaw_target = 0;
+static float alt_target = 0;
+const float pi = 3.14159265358979323846;
 
-/**
- * Main function in which your code should be written.
- *
- * This is the only function that is executed at a set interval,
- * feel free to add all the function you'd like, but make sure all
- * the code you'd like executed on a loop is in this function.
- */
- 
- /*
- * Returns true if within a specified distance of the end target.
- */
- static bool destinationReached(float end_x, float end_y, float curr_x, float curr_y) {
-     float THRESHOLD = 10.0f;	//Max distance from end point
-     float dist = sqrt(pow(end_x-curr_x,2) + pow(end_y-curr_y,2));
- }
- 
- /**
- * Given the plane's current position and a refrence point and heading ona  line,
- * Computes the distance from the line using dot products
- */
+//Line-following code; tracks point further down line in space and sets vector from  that location
 static float line_error(float tar_h, float tar_px, float tar_py ,float curr_px, float curr_py) {
     //x y z = North East Down
-    float vx, vy; //to-target vector, centered on current position
-    float ux, uy; //Unit vector version of v
-    float hx, hy; //unit heading vector, centered on current position
-    float Mv;	  // Magnitude of vector v
+    float vx, vy; //to-target vector
+    float ux, uy; //unit to-target vector
+    float hx, hy; //unit heading vector
+    float Mv;
     float theta_err;
     //float heading_err;
-
+    
     vx = tar_px - curr_px;
     vy = tar_py - curr_py;
     Mv = sqrt(pow(vx,2) + pow(vy,2));
@@ -100,78 +81,82 @@ static float line_error(float tar_h, float tar_px, float tar_py ,float curr_px, 
     return Mv*(float)sin(theta_err);
 }
 
+//Locks altitude and yaw of line
 void lock_target(float yaw_t, float alt_t) {
     yaw_target = yaw_t;
     alt_target = alt_t;
-    yaw_desired = yaw_t;
+    high_data.yaw_target = yaw_target;
+    high_data.z_locked = alt_target;
 }
 
 void flight_control() {
-
+    
+    //If you've entered into Auto mode
     if ((hrt_absolute_time() - previous_loop_timestamp) > 1000000.0f) {
-        //If you've entered into Auto mode
         target_locked = true;
     }
     
     if (new_pic) {
-
-		// TODO: run picture result logic here......
-
-		// set new_pic to false, as just processed this pic result, DO NOT REMOVE
-		new_pic = false;
-	}
+        
+        // TODO: run picture result logic here......
+        
+        // set new_pic to false, as just processed this pic result, DO NOT REMOVE
+        new_pic = false;
+    }
     
-    //PROBLEM 1
-    if (target_locked) { //Just entered Auto-Mode
-    	float offset = 0.3f; //Provide a slight angular offset to start plane off the line
+    //If Automatic Mode is detected, set line
+    if (target_locked) {
         lock_target(yaw, position_D_gps);
-        tx = (float)cos(yaw+.3) * 100.0f + position_E;
-        ty = (float)sin(yaw+.3) * 100.0f + position_N;
-        //
+        tx = (float)cos(yaw) * 100.0f + position_E;
+        ty = (float)sin(yaw) * 100.0f + position_N;
+        high_data.x_locked = tx;
+        high_data.y_locked = ty;
+        high_data.is_auto = target_locked;
         target_locked = false;
     }
-    
-    //PROBLEM 2
-    if (destinationReached(tx, ty, position_N, position_E)) { //Find new waypoint
-        float offset = 0.0f; //Provide a slight angular offset to start plane off the line
-        //.78554 is 45deg
-        //.2617 is 15deg
-        float newYaw = 0.2617f;
-        lock_target(yaw+0.52f, position_D_gps);
-        tx = (float)cos(yaw+.offset) * 80.0f + position_E;
-        ty = (float)sin(yaw+.offset) * 80.0f + position_N;
-        //
-        target_locked = false;
-    }
-    
     
     float e_line = line_error(yaw_target, tx, ty, position_N, position_E);
     
-    float roll_cor = (aah_parameters.ail_trim - aah_parameters.K_ail_beta * (roll) - aah_parameters.K_ail_betadot * (roll_rate) - aah_parameters.K_ail_gamma * (yaw - yaw_target) - aah_parameters.K_ail_gammadot * (yaw_rate) - aah_parameters.K_ail_y * (e_line));
+    //Compensates for the point at which the yaw suddenly changes from -pi to +pi
+    if ((yaw_target > 0) && (yaw_target - yaw > pi)) {
+        yaw_error = (yaw_target - yaw) - 2*pi;
+    }
+    else if ((yaw_target < 0) && (yaw_target - yaw < -pi)) {
+        yaw_error = 2*pi + (yaw_target - yaw);
+    }
+    else {
+        yaw_error = yaw_target - yaw;
+    }
     
-    float pitch_cor = (aah_parameters.ele_trim - aah_parameters.K_ele_alpha * (pitch - aah_parameters.pitch_trim) - aah_parameters.K_ele_alphadot * (pitch_rate) - aah_parameters.K_ele_gamma * (yaw - yaw_target) + aah_parameters.K_ele_gammadot * (abs(yaw_rate)) + aah_parameters.K_ele_z * (position_D_gps - alt_target) - aah_parameters.K_ele_y * (e_line));
+    float roll_cor = (aah_parameters.K_ail_beta * (roll) - aah_parameters.K_ail_betadot * (roll_rate) - aah_parameters.K_ail_gamma * (yaw_error) - aah_parameters.K_ail_gammadot * (yaw_rate) - aah_parameters.K_ail_y * (e_line));
+    
+    float pitch_cor = (aah_parameters.K_ele_alpha * (pitch - aah_parameters.pitch_trim) - aah_parameters.K_ele_alphadot * (pitch_rate) + aah_parameters.K_ele_z * (position_D_gps - alt_target)); // aah_parameters.K_ele_gamma * (yaw - yaw_target) + aah_parameters.K_ele_gammadot * (abs(yaw_rate) - aah_parameters.K_ele_y * (e_line));
     
     //float yaw_cor = (aah_parameters.rud_trim - aah_parameters.K_rud_gamma * (yaw) - aah_parameters.K_rud_gammadot*(yaw_rate));
-
     
-	// getting low data value example
-	// float my_low_data = low_data.variable_name1;
-
-	// setting high data value example
-	//high_data.variable_name1 = my_float_variable;
+    
+    // getting low data value example
+    // float my_low_data = low_data.variable_name1;
+    
+    // setting high data value example
+    high_data.x_position = position_E;
+    high_data.y_position = position_N;
+    high_data.z_position = position_D_gps;
     high_data.y_error = e_line;
     high_data.alpha_error = (pitch - aah_parameters.pitch_trim);
     high_data.beta_error = roll;
-    high_data.gamma_error = (yaw - yaw_target);
+    high_data.z_error = position_D_gps - alt_target;
+    high_data.yaw = yaw;
+    high_data.yaw_errortrue = yaw_target - yaw;
+    high_data.yaw_errorcorrected = yaw_error;
     
-
-	// ENSURE THAT YOU SET THE SERVO OUTPUTS!!!
-	// outputs should be set to values between -1..1 (except throttle is 0..1)
-	// where zero is no actuation, and -1,1 are full throw in either the + or - directions
-	
+    
+    // ENSURE THAT YOU SET THE SERVO OUTPUTS!!!
+    // outputs should be set to values between -1..1 (except throttle is 0..1)
+    // where zero is no actuation, and -1,1 are full throw in either the + or - directions
+    
     roll_servo_out = roll_cor;
     pitch_servo_out = pitch_cor;
     yaw_servo_out = man_yaw_in;
-	throttle_servo_out = man_throttle_in;
+    throttle_servo_out = man_throttle_in;
 }
-
