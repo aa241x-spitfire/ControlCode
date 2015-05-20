@@ -58,6 +58,12 @@ static float yaw_target = 0;
 static float alt_target = 0;
 const float pi = 3.14159265358979323846;
 
+
+static bool destinationReached(float end_x, float end_y, float curr_x, float curr_y) {
+    float THRESHOLD = 10.0f;	//Max distance from end point
+    float dist = sqrt(pow(end_x-curr_x,2) + pow(end_y-curr_y,2));
+}
+
 //Line-following code; tracks point further down line in space and sets vector from  that location
 static float line_error(float tar_h, float tar_px, float tar_py ,float curr_px, float curr_py) {
     //x y z = North East Down
@@ -112,6 +118,19 @@ void flight_control() {
         high_data.x_locked = tx;
         high_data.y_locked = ty;
         high_data.is_auto = target_locked;
+        target_locked = false;
+    }
+    
+        //PROBLEM 2
+    if (destinationReached(tx, ty, position_N, position_E)) { //Find new waypoint
+        float offset = 0.0f; //Provide a slight angular offset to start plane off the line
+        //.78554 is 45deg
+        //.2617 is 15deg
+        float newYaw = 0.2617f;
+        lock_target(yaw+0.52f, position_D_gps);
+        tx = (float)cos(yaw+.offset) * 80.0f + position_E;
+        ty = (float)sin(yaw+.offset) * 80.0f + position_N;
+        //
         target_locked = false;
     }
     
