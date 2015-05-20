@@ -61,7 +61,7 @@
  */
 
 // list of variable names
-#define HIGH_FIELD1 x_error;
+#define HIGH_FIELD1 is_auto_off;
 #define HIGH_FIELD2 y_error;
 #define HIGH_FIELD3 z_error;
 #define HIGH_FIELD4 x_position;
@@ -70,13 +70,13 @@
 #define HIGH_FIELD7 x_locked;
 #define HIGH_FIELD8 y_locked;
 #define HIGH_FIELD9 z_locked;
-#define HIGH_FIELD10 is_auto;
-#define HIGH_FIELD11 alpha_error;
-#define HIGH_FIELD12 beta_error;
-#define HIGH_FIELD13 yaw;
-#define HIGH_FIELD14 yaw_target;
-#define HIGH_FIELD15 yaw_errortrue;
-#define HIGH_FIELD16 yaw_errorcorrected;
+#define HIGH_FIELD10 theta_u;
+#define HIGH_FIELD11 theta_h;
+#define HIGH_FIELD12 yaw;
+#define HIGH_FIELD13 yaw_target;
+#define HIGH_FIELD14 yaw_errortrue;
+#define HIGH_FIELD15 yaw_errorcorrected;
+#define HIGH_FIELD16 is_auto;
 
 
 /**
