@@ -58,10 +58,11 @@ static float yaw_target = 0;
 static float alt_target = 0;
 const float pi = 3.14159265358979323846;
 
-
+//Determines if near threshold value
 static bool destinationReached(float end_x, float end_y, float curr_x, float curr_y) {
-    float THRESHOLD = 10.0f;	//Max distance from end point
+    float THRESHOLD = 40.0f;	//Max distance from end point
     float dist = sqrt(pow(end_x-curr_x,2) + pow(end_y-curr_y,2));
+    return (dist <= THRESHOLD);
 }
 
 //Line-following code; tracks point further down line in space and sets vector from  that location
@@ -71,20 +72,25 @@ static float line_error(float tar_h, float tar_px, float tar_py ,float curr_px, 
     float ux, uy; //unit to-target vector
     float hx, hy; //unit heading vector
     float Mv;
-    float theta_err;
-    //float heading_err;
+    float theta_err, theta_u, theta_h;
     
     vx = tar_px - curr_px;
     vy = tar_py - curr_py;
-    Mv = sqrt(pow(vx,2) + pow(vy,2));
+    Mv = abs(sqrt(pow(vx,2) + pow(vy,2)));
     
     ux = vx/Mv;
     uy = vy/Mv;
+    theta_u = atan2(uy, ux);
+    //high_data.theta_u = theta_u;
     
-    hx = cos(tar_h);
-    hy = sin(tar_h);
-    theta_err = acos(ux*hx+uy*hy);
-    return Mv*(float)sin(theta_err);
+    hx = sin(tar_h);
+    hy = cos(tar_h);
+    //theta_h = atan2(hy, hx);
+    high_data.theta_h = theta_h;
+    
+    theta_err = theta_h - theta_u;
+    
+    return Mv*(float)sin(theta_err); //too far left -> + too far right -> -
 }
 
 //Locks altitude and yaw of line
@@ -96,7 +102,7 @@ void lock_target(float yaw_t, float alt_t) {
 }
 
 void flight_control() {
-    
+
     //If you've entered into Auto mode
     if ((hrt_absolute_time() - previous_loop_timestamp) > 1000000.0f) {
         target_locked = true;
@@ -112,32 +118,31 @@ void flight_control() {
     
     //If Automatic Mode is detected, set line
     if (target_locked) {
-        lock_target(yaw, position_D_gps);
-        tx = (float)cos(yaw) * 100.0f + position_E;
-        ty = (float)sin(yaw) * 100.0f + position_N;
+        lock_target(yaw + aah_parameters.offset_yaw, position_D_gps);
+        tx = (float)sin(yaw_target) * 80.0f + position_E + aah_parameters.offset_x;
+        ty = (float)cos(yaw_target) * 80.0f + position_N + aah_parameters.offset_y;
         high_data.x_locked = tx;
         high_data.y_locked = ty;
         high_data.is_auto = target_locked;
         target_locked = false;
+        high_data.is_auto_off = target_locked;
     }
     
-        //PROBLEM 2
-    if (destinationReached(tx, ty, position_N, position_E)) { //Find new waypoint
-        float offset = 0.0f; //Provide a slight angular offset to start plane off the line
+    //PROBLEM 2
+    if (destinationReached(tx, ty, position_E, position_N)) { //Find new waypoint
         //.78554 is 45deg
         //.2617 is 15deg
-        float newYaw = 0.2617f;
-        lock_target(yaw+0.52f, position_D_gps);
-        tx = (float)cos(yaw+.offset) * 80.0f + position_E;
-        ty = (float)sin(yaw+.offset) * 80.0f + position_N;
-        //
-        target_locked = false;
+        float newYaw = -0.78554f;
+        lock_target(yaw_target + newYaw, position_D_gps);
+        tx = (float)sin(yaw_target) * 80.0f + position_E;
+        ty = (float)cos(yaw_target) * 80.0f + position_N;
     }
     
-    float e_line = line_error(yaw_target, tx, ty, position_N, position_E);
+    float e_line = line_error(yaw_target, tx, ty, position_E, position_N);
     
     //Compensates for the point at which the yaw suddenly changes from -pi to +pi
     if ((yaw_target > 0) && (yaw_target - yaw > pi)) {
+        //anticlockwise -> + clockwise -> -
         yaw_error = (yaw_target - yaw) - 2*pi;
     }
     else if ((yaw_target < 0) && (yaw_target - yaw < -pi)) {
@@ -147,12 +152,9 @@ void flight_control() {
         yaw_error = yaw_target - yaw;
     }
     
-    float roll_cor = (aah_parameters.K_ail_beta * (roll) - aah_parameters.K_ail_betadot * (roll_rate) - aah_parameters.K_ail_gamma * (yaw_error) - aah_parameters.K_ail_gammadot * (yaw_rate) - aah_parameters.K_ail_y * (e_line));
+    float roll_cor = (aah_parameters.ail_trim - aah_parameters.K_ail_beta * (roll) - aah_parameters.K_ail_betadot * (roll_rate) - aah_parameters.K_ail_gamma * (yaw_error) - aah_parameters.K_ail_gammadot * (yaw_rate) - aah_parameters.K_ail_y * (e_line));
     
-    float pitch_cor = (aah_parameters.K_ele_alpha * (pitch - aah_parameters.pitch_trim) - aah_parameters.K_ele_alphadot * (pitch_rate) + aah_parameters.K_ele_z * (position_D_gps - alt_target)); // aah_parameters.K_ele_gamma * (yaw - yaw_target) + aah_parameters.K_ele_gammadot * (abs(yaw_rate) - aah_parameters.K_ele_y * (e_line));
-    
-    //float yaw_cor = (aah_parameters.rud_trim - aah_parameters.K_rud_gamma * (yaw) - aah_parameters.K_rud_gammadot*(yaw_rate));
-    
+    float pitch_cor = (aah_parameters.ele_trim - aah_parameters.K_ele_alpha * (pitch - aah_parameters.pitch_trim) - aah_parameters.K_ele_alphadot * (pitch_rate) - aah_parameters.K_ele_z * (position_D_gps - alt_target)); /*- aah_parameters.K_ele_gamma * (yaw - yaw_target) + aah_parameters.K_ele_gammadot * (abs(yaw_rate) - aah_parameters.K_ele_y * (e_line));*/
     
     // getting low data value example
     // float my_low_data = low_data.variable_name1;
