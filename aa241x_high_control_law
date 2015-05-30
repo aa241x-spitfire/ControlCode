@@ -49,10 +49,8 @@
 #include "aa241x_high_aux.h"
 
 
-
-
-
 //target parameters;
+
 static bool target_locked = false;
 static void lock_target(float yaw_t, float alt_t);
 static float tx, ty, yaw_error;
@@ -70,38 +68,13 @@ static int MaxStep = 25;
 //rotate preconfig path for wind
 static void updateWind() {
     int windDir = 0; //REPLACE WITH ACTUAL WIND VARIABLE
-    float theta = (float)windDir*pi/4
+    float theta = (float)windDir*pi/4;
     for (int i = 0; i < MaxStep; i++) {
-        float ax = testx[i]*cos(theta) - testy[i]*sin(theta);
-        float ay = testx[i]*sin(theta) + testy[i]*cos(theta);
+        float ax = testx[i]*(float)cos(theta) - testy[i]*(float)sin(theta);
+        float ay = testx[i]*(float)sin(theta) + testy[i]*(float)cos(theta);
         testx[i] = ax;
         testy[i] = ay;
         testh[i] = (testh[i]+windDir)%8;
-    }
-}
-
-//follow a preconfig'd path for now
-static void updateMission() {
-	if (target_locked) {
-		if (missionStep < maxStep) {
-			lock_target((float)testh[missionStep]*pi/4, position_D_gps);
-			tx = testx[missionStep]
-			ty = testy[missionStep]
-			missionStep++;
-		} else {
-			lock_target(yaw + aah_parameters.offset_yaw, position_D_gps);
-			tx = (float)sin(yaw_target) * 80.0f + position_E;
-			ty = (float)cos(yaw_target) * 80.0f + position_N;
-		}
-        high_data.x_locked = tx;
-        high_data.y_locked = ty;
-        high_data.is_auto = target_locked;
-        target_locked = false;
-        high_data.is_auto_off = target_locked;
-    }
-	
-	if (destinationReached(tx, ty, position_E, position_N)) {
-		target_locked = true; //advance to next mission step
     }
 }
 
@@ -111,6 +84,33 @@ static bool destinationReached(float end_x, float end_y, float curr_x, float cur
     float dist = sqrt(pow(end_x-curr_x,2) + pow(end_y-curr_y,2));
     return (dist <= THRESHOLD);
 }
+
+//follow a preconfig'd path for now
+static void updateMission() {
+    if (target_locked) {
+        if (missionStep < MaxStep) {
+            lock_target((float)testh[missionStep]*pi/4, position_D_gps);
+            tx = testx[missionStep];
+            ty = testy[missionStep];
+            missionStep++;
+        } else {
+            lock_target(yaw + aah_parameters.offset_yaw, position_D_gps);
+            tx = (float)sin(yaw_target) * 80.0f + position_E;
+            ty = (float)cos(yaw_target) * 80.0f + position_N;
+        }
+        high_data.x_locked = tx;
+        high_data.y_locked = ty;
+        //high_data.is_auto = target_locked;
+        target_locked = false;
+        high_data.is_auto_off = target_locked;
+    }
+    
+    if (destinationReached(tx, ty, position_E, position_N)) {
+        target_locked = true; //advance to next mission step
+    }
+}
+
+
 
 //Line-following code; tracks point further down line in space and sets vector from  that location
 static float line_error(float tar_h, float tar_px, float tar_py ,float curr_px, float curr_py) {
@@ -128,11 +128,11 @@ static float line_error(float tar_h, float tar_px, float tar_py ,float curr_px, 
     ux = vx/Mv;
     uy = vy/Mv;
     theta_u = atan2(uy, ux);
-    //high_data.theta_u = theta_u;
+    high_data.theta_u = theta_u;
     
     hx = sin(tar_h);
     hy = cos(tar_h);
-    //theta_h = atan2(hy, hx);
+    theta_h = atan2(hy, hx);
     high_data.theta_h = theta_h;
     
     theta_err = theta_h - theta_u;
@@ -167,15 +167,16 @@ void flight_control() {
     
     updateMission();
     
+    //updateMission replaces the below target_locked loop AND destinationReached loop. Comment both of them out
+    //when running the updateMission above.
     
     //If Automatic Mode is detected, set line
-    /*if (target_locked) {
+    if (target_locked) {
         lock_target(yaw + aah_parameters.offset_yaw, position_D_gps);
-        tx = (float)sin(yaw_target) * 80.0f + position_E + aah_parameters.offset_x;
-        ty = (float)cos(yaw_target) * 80.0f + position_N + aah_parameters.offset_y;
+        tx = (float)sin(yaw_target) * 100.0f + position_E + aah_parameters.offset_x;
+        ty = (float)cos(yaw_target) * 100.0f + position_N + aah_parameters.offset_y;
         high_data.x_locked = tx;
         high_data.y_locked = ty;
-        high_data.is_auto = target_locked;
         target_locked = false;
         high_data.is_auto_off = target_locked;
     }
@@ -188,7 +189,7 @@ void flight_control() {
         lock_target(yaw_target + newYaw, position_D_gps);
         tx = (float)sin(yaw_target) * 80.0f + position_E;
         ty = (float)cos(yaw_target) * 80.0f + position_N;
-    }*/
+    }
     
     float e_line = line_error(yaw_target, tx, ty, position_E, position_N);
     
@@ -204,9 +205,11 @@ void flight_control() {
         yaw_error = yaw_target - yaw;
     }
     
-    float roll_cor = (aah_parameters.ail_trim - aah_parameters.K_ail_beta * (roll) - aah_parameters.K_ail_betadot * (roll_rate) - aah_parameters.K_ail_gamma * (yaw_error) - aah_parameters.K_ail_gammadot * (yaw_rate) - aah_parameters.K_ail_y * (e_line));
+    float roll_cor = (aah_parameters.K_ail_beta * (roll - aah_parameters.ail_trim) - aah_parameters.K_ail_betadot * (roll_rate) - aah_parameters.K_ail_gamma * (yaw_error) - aah_parameters.K_ail_gammadot * (yaw_rate) - aah_parameters.K_ail_y * (e_line));
     
-    float pitch_cor = (aah_parameters.ele_trim - aah_parameters.K_ele_alpha * (pitch - aah_parameters.pitch_trim) - aah_parameters.K_ele_alphadot * (pitch_rate) - aah_parameters.K_ele_z * (position_D_gps - alt_target)); /*- aah_parameters.K_ele_gamma * (yaw - yaw_target) + aah_parameters.K_ele_gammadot * (abs(yaw_rate) - aah_parameters.K_ele_y * (e_line));*/
+    float pitch_cor = (aah_parameters.ele_trim - aah_parameters.K_ele_alpha * (pitch - aah_parameters.pitch_trim) - aah_parameters.K_ele_alphadot * (pitch_rate) - aah_parameters.K_ele_z * (position_D_gps - alt_target));
+    
+    float throttle_cor = (aah_parameters.thr_trim - aah_parameters.K_thr_z * (position_D_gps - alt_target));
     
     // getting low data value example
     // float my_low_data = low_data.variable_name1;
@@ -217,7 +220,7 @@ void flight_control() {
     high_data.z_position = position_D_gps;
     high_data.y_error = e_line;
     high_data.alpha_error = (pitch - aah_parameters.pitch_trim);
-    high_data.beta_error = roll;
+    //high_data.beta_error = roll;
     high_data.z_error = position_D_gps - alt_target;
     high_data.yaw = yaw;
     high_data.yaw_errortrue = yaw_target - yaw;
@@ -231,5 +234,5 @@ void flight_control() {
     roll_servo_out = roll_cor;
     pitch_servo_out = pitch_cor;
     yaw_servo_out = man_yaw_in;
-    throttle_servo_out = man_throttle_in;
+    throttle_servo_out = throttle_cor;
 }
